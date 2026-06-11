@@ -28,9 +28,12 @@ except FileNotFoundError:
 vectorizer = TfidfVectorizer()
 tfidf_matrix = vectorizer.fit_transform(df_rag['텍스트'].fillna("").tolist())
 
-query = st.text_input("🔍 어떤 고객을 만나시나요? 필요한 화법이나 상황을 입력하세요.")
+with st.form("search_form"):
+    query = st.text_input("🔍 어떤 고객을 만나시나요? 필요한 화법이나 상황을 입력하세요.")
+    submitted = st.form_submit_button("우체국보험 화법 생성하기 🚀")
 
-if query:
+if submitted and query:
+
     query_vec = vectorizer.transform([query])
     similarity = cosine_similarity(query_vec, tfidf_matrix).flatten()
     top_indices = similarity.argsort()[-3:][::-1]
