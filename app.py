@@ -16,7 +16,7 @@ openai_api_key = st.sidebar.text_input("OpenAI API Key 입력", type="password")
 @st.cache_data
 def load_data():
     # 데이터베이스 파일 이름 지정
-    df = pd.read_csv('RAG_Ready_2026_FULL.csv')
+    df = pd.read_csv('성공스토리_RAG_Ready.csv')
     return df
 
 try:
