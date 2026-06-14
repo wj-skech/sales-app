@@ -9,7 +9,7 @@ import re
 # 1. 상단 탭 및 메인 타이틀
 st.set_page_config(page_title="AI Ins-Story", layout="wide", page_icon="🚀")
 st.title("🚀 AI Ins-Story")
-st.markdown("대화형 AI 비서: 질문 내역을 기억하며, 실전 화법과 모바일 안내장을 생성합니다.")
+st.markdown("대화형 AI 비서: 아래 채팅창에 원하는 질문을 하면 실전 화법과 모바일 안내장을 생성합니다.")
 
 # 2. API 키 로직 (영구 저장 및 자동 인식)
 openai_api_key = ""
