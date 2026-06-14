@@ -76,7 +76,6 @@ if submitted:
   2. 사고 이미지 삽입: 시각화를 위해 화면 상단이나 위험 사례 부분에 <img src="https://picsum.photos/400/200?blur=2" style="width:100%; border-radius:12px; margin-bottom:15px; box-shadow: 0 4px 6px rgba(0,0무,0,0.1);"> 와 같은 태그를 넣어 그럴듯한 배경 이미지가 들어가게 하세요.
   3. 구조화된 레이아웃: [위험 발생(사례)] -> [경제적 타격(비용)] -> [보험의 완벽한 방어막] 순서로 스크롤하며 읽기 좋게 구성하세요.
 - 반드시 ```html 로 시작해서 ``` 로 끝나는 코드 블록 안에만 HTML/CSS 코드를 작성하세요.
-"""
 - <style> 태그를 사용하여 카드형 디자인, 보험전문가를 상징하는 색상 포인트, 깔끔한 표(Table)와 둥근 모서리 등 세련되고 직관적인 모바일 UI를 구현하세요.
 """
                     user_prompt = f"**고객 상황**: {query}\n\n{context}\n\n위 자료를 토대로 스크립트와 HTML 안내장을 도제해줘."
