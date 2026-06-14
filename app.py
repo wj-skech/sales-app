@@ -3,17 +3,29 @@ import streamlit.components.v1 as components
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from openai import OpenAI  # 최신 버전으로 변경
+from openai import OpenAI
 import re
 
-# 1. 상단 탭 및 메인 타이틀 변경 (우체통 -> AI 로봇, 이름 변경)
+# 1. 상단 탭 및 메인 타이틀
 st.set_page_config(page_title="AI Ins-Story", layout="wide", page_icon="🚀")
 st.title("🚀 AI Ins-Story")
 st.markdown("현장 화법과 고객 제시용 맞춤형 모바일 안내장을 동시에 생성합니다.")
 
-# 2. 사이드바 설정
-st.sidebar.header("⚙️ 설정 및 필터")
-openai_api_key = st.sidebar.text_input("OpenAI API Key 입력", type="password", help="여기에 API 키를 꼭 넣어주세요!")
+# 2. API 키 영구 저장 및 자동 인식 로직 (매번 입력 방지)
+openai_api_key = ""
+if "OPENAI_API_KEY" in st.secrets:
+    # Streamlit 클라우드 설정에 키가 등록되어 있으면 자동으로 가져옴 (사이드바 숨김)
+    openai_api_key = st.secrets["OPENAI_API_KEY"]
+else:
+    # 클라우드에 미등록 시 사이드바에서 입력받되, 세션에 저장하여 앱 구동 중 날아가지 않게 유지
+    st.sidebar.header("⚙️ 설정")
+    if "api_key" not in st.session_state:
+        st.session_state["api_key"] = ""
+    
+    api_input = st.sidebar.text_input("OpenAI API Key 입력", type="password", value=st.session_state["api_key"])
+    if api_input:
+        st.session_state["api_key"] = api_input
+        openai_api_key = api_input
 
 # 3. 데이터 불러오기
 @st.cache_data
@@ -31,7 +43,7 @@ except FileNotFoundError:
 vectorizer = TfidfVectorizer()
 tfidf_matrix = vectorizer.fit_transform(df_rag['텍스트'].fillna("").tolist())
 
-# 5. 메인 검색창 및 전송 버튼 이름 변경
+# 5. 메인 검색창 및 전송 버튼
 with st.form("search_form"):
     query = st.text_input("🔍 어떤 고객을 만나시나요? 필요한 화법이나 상황을 입력하세요.")
     submitted = st.form_submit_button("AI 화법 생성하기")
@@ -41,7 +53,7 @@ if submitted:
     if not query:
         st.warning("⚠️ 어떤 화법이 필요하신지 검색창에 내용을 입력해 주세요!")
     elif not openai_api_key:
-        st.warning("🔑 왼쪽 사이드바(설정 창)에 OpenAI API Key를 먼저 입력해 주세요!")
+        st.warning("🔑 OpenAI API Key가 필요합니다. 설정 창에 입력하거나 앱 설정(Secrets)에 등록해 주세요.")
     else:
         # 데이터 검색
         query_vec = vectorizer.transform([query])
@@ -54,29 +66,39 @@ if submitted:
                 retrieved_chunks.append(df_rag.iloc[idx]['텍스트'])
 
         if not retrieved_chunks:
-            st.info("🥲 입력하신 내용과 일치하는 AI 화법을 찾지 못했습니다.")
+            st.info("🥲 입력하신 내용과 일치하는 성공스토리 화법을 찾지 못했습니다.")
         else:
-            with st.spinner("🚀 스크립트 작성 및 모바일 안내장 디자인을 렌더링 중입니다..."):
+            with st.spinner("🤖 스크립트 작성 및 모바일 안내장 디자인을 렌더링 중입니다..."):
                 try:
                     # 최신 버전용 API 엔진 가동
                     client = OpenAI(api_key=openai_api_key)
                     
                     context = "\n\n".join([f"[참고자료]: {c}" for c in retrieved_chunks])
-                    system_prompt = """당신은 보험업계의 최상위 탑클래스 세일즈 코치이자, 트렌디한 모바일 웹 디자이너입니다.
-사용자의 질문을 분석하여 다음 [2가지 파트]로 출력하세요.
+                    
+                    # 7. 극강의 현장 실전용 + 프리미엄 안내장 프롬프트 (용어 교체 완료)
+                    system_prompt = """당신은 보험업계의 전설적인 세일즈 마스터이자 프리미엄 금융 마케터입니다.
+[참고자료]로 제공된 과거 '성공스토리' 원본의 강력한 현장 화법과 세련된 안내장 구성을 완벽하게 복원하고 현대화하는 것이 당신의 유일한 임무입니다.
 
 [파트 1: 보험설계사용 실전 클로징 스크립트]
-- 🚨절대주의🚨: 사용자가 질문한 '특정 보험 및 상황(예: 운전자보험)'에만 100% 집중하세요. 50대라고 해서 묻지도 않은 노인성 질환, 건강보험 이야기 등을 섞어 말하면 절대 안 됩니다.
-- 화법의 깊이: 누구나 아는 식상한 필요성(예: 사고 나면 다친다)은 버리세요. "우회전 일시정지 위반 12대 중과실", "민식이법 스쿨존 합의금 폭탄", "경찰조사 단계 변호사 선임비용 선지급 부재 시의 가계 파산" 등 고객이 당장 두려움을 느낄 수 있는 구체적이고 치명적인 리스크를 송곳처럼 찌르세요.
+- 🚨교과서적인 설명, 모호하고 뻔한 비유는 절대 금지합니다.
+- [참고자료]의 원본 문맥과 흐름(어조, 끊어읽기, 강조점)을 철저히 분석하여, 현장에서 즉시 입 밖으로 낼 수 있는 '실제 대화형 스크립트'로 작성하세요.
+- 반드시 다음 4단계 세일즈 구조를 지키세요:
+  1. 도입(Hook): 고객의 허를 찌르는 강렬하고 도발적인 첫 질문.
+  2. 팩트 폭격(Pain Point): 구체적인 수치, 최신 법령, 실제 사례를 들어 리스크를 극대화.
+  3. 해결책(Solution): 다른 곳이 아닌 '우리가 제안하는 보장'이어야만 하는 이유와 핵심 내용을 단도직입적으로 제시.
+  4. 클로징(Action): 확신에 찬 목소리로 당당하게 가입(사인)을 권유.
+- 말투: 현장감 넘치고 당당한 프로의 구어체 ("~하시겠습니까?", "~하셔야 합니다.")
 
-[파트 2: 고객 제시용 디지털 모바일 안내장 (HTML/CSS)]
-- 🚨단순한 표(Table) 위주의 밋밋한 구성을 절대 금지합니다.🚨 고객이 스마트폰으로 보는 순간 경각심을 느낄 수 있는 '시각적 스토리텔링' 디자인을 하세요.
-- 반드시 아래 3가지 요소를 포함하여 CSS 코딩을 하세요:
-  1. 시각적 충격 카드(Impact Card): 🚨, 💥, ⚖️, 💸 등의 이모티콘을 큼직하게 활용하여 위험 사례별로 세련된 박스(Card) 디자인을 만드세요. 경고 문구는 붉은색 계열로 시선을 강탈하게 하세요.
-  2. 사고 이미지 삽입: 시각화를 위해 화면 상단이나 위험 사례 부분에 <img src="https://picsum.photos/400/200?blur=2" style="width:100%; border-radius:12px; margin-bottom:15px; box-shadow: 0 4px 6px rgba(0,0무,0,0.1);"> 와 같은 태그를 넣어 그럴듯한 배경 이미지가 들어가게 하세요.
-  3. 구조화된 레이아웃: [위험 발생(사례)] -> [경제적 타격(비용)] -> [보험의 완벽한 방어막] 순서로 스크롤하며 읽기 좋게 구성하세요.
-- 반드시 ```html 로 시작해서 ``` 로 끝나는 코드 블록 안에만 HTML/CSS 코드를 작성하세요.
-- <style> 태그를 사용하여 카드형 디자인, 보험전문가를 상징하는 색상 포인트, 깔끔한 표(Table)와 둥근 모서리 등 세련되고 직관적인 모바일 UI를 구현하세요.
+[파트 2: 고객 제시용 프리미엄 디지털 안내장 (HTML/CSS)]
+- 🚨이미지 깨짐 방지: 외부 이미지 링크(<img src...>)는 절대 사용하지 마세요.
+- 대신, 최고급 금융사 리플렛처럼 CSS 요소(부드러운 linear-gradient 배경, border-radius, box-shadow)와 고해상도 이모티콘(🚨, 📊, 🛡️, 💰, 💡)을 활용하여 시각적으로 압도하는 카드형 UI를 만드세요.
+- 성의 없는 줄글 요약을 금지합니다. 고객의 시선을 멈추게 하는 '카피라이팅'으로 채우세요.
+- 레이아웃 필수 구조:
+  1. 프리미엄 헤더: 시선을 끄는 그라데이션 배경 + 도발적인 메인 카피(큰 글씨).
+  2. 자가진단 체크리스트: 고객이 스스로 읽고 찔리게 만드는 팩트 체크 항목 3가지 (체크박스 스타일).
+  3. 시각적 대비 박스: [위험 방치 시 타격] vs [당사 보험업계 최고 보장의 완벽 방어막]을 대비시켜 디자인.
+  4. 신뢰의 푸터: '신뢰할 수 있는 보험업계 최고의 파트너'라는 느낌을 주는 하단 마무리.
+- 반드시 ```html 로 시작해서 ``` 로 끝나는 코드 블록 안에만 작성하세요.
 """
                     user_prompt = f"**고객 상황**: {query}\n\n{context}\n\n위 자료를 토대로 스크립트와 HTML 안내장을 도제해줘."
                     
@@ -96,7 +118,7 @@ if submitted:
                         html_content = ""
                         script_content = full_response
 
-                    tab1, tab2 = st.tabs(["🗣️ 보험설계사용 실전 화법 (스크립트)", "📱 고객 제시용 디지털 안내장"])
+                    tab1, tab2 = st.tabs(["🗣️ 보험설계사용 실전 화법", "📱 고객 제시용 디지털 안내장"])
                     with tab1:
                         st.subheader("✨ AI 추천 실전 세일즈 스크립트")
                         st.success(script_content)
