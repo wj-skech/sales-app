@@ -9,15 +9,13 @@ import re
 # 1. 상단 탭 및 메인 타이틀
 st.set_page_config(page_title="AI Ins-Story", layout="wide", page_icon="🚀")
 st.title("🚀 AI Ins-Story")
-st.markdown("현장 화법과 고객 제시용 맞춤형 모바일 안내장을 동시에 생성합니다.")
+st.markdown("대화형 AI 비서: 질문 내역을 기억하며, 실전 화법과 모바일 안내장을 생성합니다.")
 
-# 2. API 키 영구 저장 및 자동 인식 로직 (매번 입력 방지)
+# 2. API 키 로직 (영구 저장 및 자동 인식)
 openai_api_key = ""
 if "OPENAI_API_KEY" in st.secrets:
-    # Streamlit 클라우드 설정에 키가 등록되어 있으면 자동으로 가져옴 (사이드바 숨김)
     openai_api_key = st.secrets["OPENAI_API_KEY"]
 else:
-    # 클라우드에 미등록 시 사이드바에서 입력받되, 세션에 저장하여 앱 구동 중 날아가지 않게 유지
     st.sidebar.header("⚙️ 설정")
     if "api_key" not in st.session_state:
         st.session_state["api_key"] = ""
@@ -43,20 +41,42 @@ except FileNotFoundError:
 vectorizer = TfidfVectorizer()
 tfidf_matrix = vectorizer.fit_transform(df_rag['텍스트'].fillna("").tolist())
 
-# 5. 메인 검색창 및 전송 버튼
-with st.form("search_form"):
-    query = st.text_input("🔍 어떤 고객을 만나시나요? 필요한 화법이나 상황을 입력하세요.")
-    submitted = st.form_submit_button("AI 화법 생성하기")
+# 5. 채팅 내역(메모리) 초기화
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-# 6. 작동 로직
-if submitted:
-    if not query:
-        st.warning("⚠️ 어떤 화법이 필요하신지 검색창에 내용을 입력해 주세요!")
-    elif not openai_api_key:
-        st.warning("🔑 OpenAI API Key가 필요합니다. 설정 창에 입력하거나 앱 설정(Secrets)에 등록해 주세요.")
+# 6. 이전 채팅 내역을 화면에 렌더링
+for msg in st.session_state.messages:
+    if msg["role"] == "user":
+        with st.chat_message("user"):
+            st.markdown(msg["content"])
     else:
+        with st.chat_message("assistant"):
+            tab1, tab2 = st.tabs(["🗣️ 보험설계사용 실전 화법", "📱 고객 제시용 디지털 안내장"])
+            with tab1:
+                st.success(msg["script"])
+            with tab2:
+                if msg.get("html"):
+                    components.html(msg["html"], height=600, scrolling=True)
+                else:
+                    st.warning("디지털 안내장 렌더링 결과가 없습니다.")
+
+# 7. 하단 고정형 채팅 입력창 (Gemini 스타일)
+if prompt := st.chat_input("🔍 어떤 고객을 만나시나요? 필요한 화법이나 상황을 입력하세요."):
+    
+    if not openai_api_key:
+        st.warning("🔑 OpenAI API Key가 필요합니다. 설정 창에 입력하거나 앱 설정(Secrets)에 등록해 주세요.")
+        st.stop()
+
+    # 사용자가 입력한 내용을 즉시 화면에 표시하고 메모리에 저장
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    # AI 응답 생성 파트
+    with st.chat_message("assistant"):
         # 데이터 검색
-        query_vec = vectorizer.transform([query])
+        query_vec = vectorizer.transform([prompt])
         similarity = cosine_similarity(query_vec, tfidf_matrix).flatten()
         top_indices = similarity.argsort()[-3:][::-1]
         
@@ -66,16 +86,15 @@ if submitted:
                 retrieved_chunks.append(df_rag.iloc[idx]['텍스트'])
 
         if not retrieved_chunks:
-            st.info("🥲 입력하신 내용과 일치하는 성공스토리 화법을 찾지 못했습니다.")
+            error_msg = "🥲 입력하신 내용과 일치하는 성공스토리 화법을 찾지 못했습니다."
+            st.info(error_msg)
+            st.session_state.messages.append({"role": "assistant", "script": error_msg, "html": ""})
         else:
             with st.spinner("🤖 스크립트 작성 및 모바일 안내장 디자인을 렌더링 중입니다..."):
                 try:
-                    # 최신 버전용 API 엔진 가동
                     client = OpenAI(api_key=openai_api_key)
-                    
                     context = "\n\n".join([f"[참고자료]: {c}" for c in retrieved_chunks])
                     
-                    # 7. 극강의 현장 실전용 + 프리미엄 안내장 프롬프트 (용어 교체 완료)
                     system_prompt = """당신은 보험업계의 전설적인 세일즈 마스터이자 프리미엄 금융 마케터입니다.
 [참고자료]로 제공된 과거 '성공스토리' 원본의 강력한 현장 화법과 세련된 안내장 구성을 완벽하게 복원하고 현대화하는 것이 당신의 유일한 임무입니다.
 
@@ -100,7 +119,7 @@ if submitted:
   4. 신뢰의 푸터: '신뢰할 수 있는 보험업계 최고의 파트너'라는 느낌을 주는 하단 마무리.
 - 반드시 ```html 로 시작해서 ``` 로 끝나는 코드 블록 안에만 작성하세요.
 """
-                    user_prompt = f"**고객 상황**: {query}\n\n{context}\n\n위 자료를 토대로 스크립트와 HTML 안내장을 도제해줘."
+                    user_prompt = f"**고객 상황**: {prompt}\n\n{context}\n\n위 자료를 토대로 스크립트와 HTML 안내장을 도제해줘."
                     
                     response = client.chat.completions.create(
                         model="gpt-4o",
@@ -120,12 +139,19 @@ if submitted:
 
                     tab1, tab2 = st.tabs(["🗣️ 보험설계사용 실전 화법", "📱 고객 제시용 디지털 안내장"])
                     with tab1:
-                        st.subheader("✨ AI 추천 실전 세일즈 스크립트")
                         st.success(script_content)
                     with tab2:
                         if html_content:
-                            components.html(html_content, height=650, scrolling=True)
+                            components.html(html_content, height=600, scrolling=True)
                         else:
                             st.warning("디지털 안내장 렌더링에 실패했습니다.")
+
+                    # 생성된 결과를 메모리에 저장
+                    st.session_state.messages.append({
+                        "role": "assistant", 
+                        "script": script_content, 
+                        "html": html_content
+                    })
+
                 except Exception as e:
                     st.error(f"AI 통신 오류 발생: {e}")
