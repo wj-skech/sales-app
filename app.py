@@ -62,7 +62,7 @@ if submitted:
                     client = OpenAI(api_key=openai_api_key)
                     
                     context = "\n\n".join([f"[참고자료]: {c}" for c in retrieved_chunks])
-                    system_prompt = system_prompt = """당신은 보험업계의 최상위 탑클래스 세일즈 코치이자, 트렌디한 모바일 웹 디자이너입니다.
+                    system_prompt = """당신은 보험업계의 최상위 탑클래스 세일즈 코치이자, 트렌디한 모바일 웹 디자이너입니다.
 사용자의 질문을 분석하여 다음 [2가지 파트]로 출력하세요.
 
 [파트 1: 보험설계사용 실전 클로징 스크립트]
